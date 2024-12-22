@@ -571,7 +571,7 @@ async def look_messages(update: Update):
             await update.delete()
         if config["look_insuit"] and has_insuit(update.text):
             await update.delete()
-    elif config["look_forward"] and update.is_forward():
+    elif config["look_forward"] and update.is_forward:
         await update.delete()
     elif update.is_file_inline:
         if config["look_image"] and update.file_inline.type=="Image":
