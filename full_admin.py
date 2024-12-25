@@ -1,46 +1,21 @@
 from rubpy import Client,filters # pip3 install rubpy
 from rubpy.types import Update # pip3 install rubpy
-from requests import get # pip3 install requests
-import asyncio
-from json import dumps,loads
-from os import remove
-import aiohttp # pip3 install aiohttp
-from aiofile import async_open as open# pip3 install aiofile
-from time import strftime
 from NightDB import NightDB
+from httpx import AsyncClient # pip3 install httpx
 from asyncio import sleep
-from random import randint
-
-insuits = ["fuck",
-"sex",
-"کص",
-"کیر",
-"کون",
-"گاید",
-"بیناموس",
-"بیشعور",
-"کوص",
-"کوس",
-"سکس",
-"ass"]
-
-# 
-#
-#
-#
-#
-#
+import utills
 
 
+print("Initing ENV...")
 admins = ["u0DsXjn0fe84d636cf1f42a0cb292693","u0DwuqS017f68d4545e326e0bbcd9ca6"]
-
 config = {
     "channel":"c0CPOlg02db41ed2e478961d720f330f",
     "usdid":"1093267119967785",
     "prdsave":"c0CPlFv09746422e4b7f4861036a3e29",
-    "allorder":100,
+    "allorder":108,
     "upload":"c0Bu1ir08f8820ca04ab1d452a13e6ee"
 }
+
 statusIncome = {
     "sizeorder":0,
     "corder":0,
@@ -49,49 +24,37 @@ statusIncome = {
     "cost":79000,
     "money":0
 }
-
-bot = Client("account.rp")
-is_autoupdate = False
-# Functions Bot Use Them 
-async def download_file(url,output):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as res:
-            async with open(output,"wb") as handle:
-                async for chunk in res.content.iter_chunked(1024*1024*100):
-                    await handle.write(chunk)
-# Need Optimizing 
-def stm(price: int):
-    result=""
-    pstr = str(price)
-    i=0
-    pos=0
-    for c in pstr[::-1]:
-        pos+=1
-        result+=c
-        if c=="-":
-            continue
-        i+=1
-        if i==3 and (not len(pstr)==pos or not 0==pos):
-            result+=','
-            i=0
-    return result[::-1]
-  
-def has_link(text: str):
-    if "https://" in text or "http://" in text or "@" in text:
-        return True
-    return False
-def has_insuit(text: str):
-    global insuits
-    for insuit in insuits:
-        if insuit in text.replace(".","").lower():
-            return True
-    return False
-    
 db = NightDB()
 db.read("""guid,look_link,look_forward,look_image,look_gif,look_voice,look_video,look_insuit
 g0CxR4B0d5fb9c244cb1bea769da8d40,True,True,False,False,False,False,True
 """)
 groups = db.get_colums("guid")
+
+bot = Client("manager.rp")
+is_autoupdate = False
+
+
+async def get_admins(object_guid: str):
+    global bot
+    try:
+        members = (await bot.get_group_admin_members(object_guid))["in_chat_members"]
+    except:
+        members = []
+    result = []
+    for member in members:
+        result.append(member["member_guid"])
+    return result
+
+async def is_admin(object_guid: str,auther_guid: str):
+    if not object_guid in utills.admins:
+        utills.admins[object_guid] = {"last_update":int(utills.time()),"members":await get_admins(object_guid)}
+    else:
+        if (int(utills.time())-utills.admins[object_guid]["last_update"]) >= 3600:
+            utills.admins[object_guid]["members"] = await get_admins(object_guid)
+    for member in utills.admins[object_guid]["members"]:
+        if auther_guid == member:
+            return True
+    return False
 
 # Shop Commands
 # Parsing AnD Execute Admins Commands
@@ -255,15 +218,17 @@ async def send_incoming_msg(update: Update):
 async def send_global_help(update: Update):
     if not update.object_guid in groups:
         return None
-    await sleep(randint(1,5))
+    await sleep(utills.randint(1,5))
     await update.reply("""**راهنما عمومی:**
 دستورات زیر جهت سرگرمی هستن
 • نام
 • جوک
 • دانستنی
+• ایا میدانی
 • بیو
 • ذکر
 • حدیث
+• الودگی [شهر مورد نظر]
 • مناسبات روز
 • اوقات شرعی [اینجا شهر مورد نظر وارد کنید]
 • داستان
@@ -271,46 +236,52 @@ async def send_global_help(update: Update):
 و برای ادمینا دستور زیر بفرسته
 • /help
 """)
+
 @bot.on_message_updates(filters.is_group(groups),filters.commands("مناسبات روز",''))
 async def send_monasbat(update: Update):
     if not update.object_guid in groups:
         return None
-    result = get("https://api.codebazan.ir/monasebat/").json()
+    async with AsyncClient() as client:
+        result = (await client.get("https://api.codebazan.ir/monasebat/")).json()
     atext = "📆| مناسبات روز \n"
     for r in result:
         atext+=r["occasion"]+"\n**+**\n"
-    await sleep(randint(1,3))
+    await sleep(utills.randint(1,3))
     await update.reply(atext)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["bio","بیو"],''))
 async def send_bio(update: Update):
     if not update.object_guid in groups:
         return None
-    await sleep(randint(1,5))
-    await update.reply(get("https://api.codebazan.ir/bio/").text)
+    await sleep(utills.randint(1,5))
+    async with AsyncClient() as client:
+        await update.reply((await client.get("https://api.codebazan.ir/bio/")).text)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["jok","جوک"],''))
 async def send_jok(update: Update):
     if not update.object_guid in groups:
         return None
-    await sleep(randint(1,5))
-    result = get("http://api.codebazan.ir/jok/").text
+    await sleep(utills.randint(1,5))
+    async with AsyncClient() as client:
+        result = (await client.get("http://api.codebazan.ir/jok/")).text
     await update.reply("📝| جوک\n"+result)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["name","نام"],''))
 async def send_name(update: Update):
     if not update.object_guid in groups:
         return None
-    await sleep(randint(1,3))
-    await update.reply(get("https://api.codebazan.ir/name/").text)
+    await sleep(utills.randint(1,3))
+    async with AsyncClient() as client:
+        await update.reply((await client.get("https://api.codebazan.ir/name/")).text)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["story","داستان"],''))
 async def send_story(update: Update):
     if not update.object_guid in groups:
         return None
     result = "📝| داستان \n"
-    result += get("http://api.codebazan.ir/dastan/").text
-    await sleep(randint(1,3))
+    async with AsyncClient() as client:
+        result += (await client.get("http://api.codebazan.ir/dastan/")).text
+    await sleep(utills.randint(1,3))
     await update.reply(result)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["dialog","دیالوگ"],''))
@@ -318,35 +289,58 @@ async def send_dialog(update: Update):
     if not update.object_guid in groups:
         return None
     result = "📝| دیالوگ \n"
-    result += get("http://api.codebazan.ir/dialog/").text
-    await sleep(randint(1,5))
+    async with AsyncClient() as client:
+        result += (await client.get("http://api.codebazan.ir/dialog/")).text
+    await sleep(utills.randint(1,5))
     await update.reply(result)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["zekr","ذکر"],''))
 async def send_zekr(update: Update):
     if not update.object_guid in groups:
         return None
-    result = get("http://api.codebazan.ir/zekr/").text
-    await sleep(randint(1,3))
+    async with AsyncClient() as client:
+        result = (await client.get("http://api.codebazan.ir/zekr/")).text
+    await sleep(utills.randint(1,3))
     await update.reply(result)
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["hadis","حدیث"],''))
-async def send_hadis(update: Update):
+async def send_hadith(update: Update):
+    # Need Update
     if not update.object_guid in groups:
         return None
-    result = "📝| حدیث هفته \n"
-    result += get("http://api.codebazan.ir/hadis/").text
-    await sleep(randint(1,3))
-    await update.reply(result)
+    async with AsyncClient() as client:
+        result = (await client.get("https://api.keybit.ir/hadis/")).json()["result"]
+    await sleep(utills.randint(1,3))
+    await update.reply(f"""
+📝| حدیث هفته 
+
+** {result['text']} **
+
+✍️ ~ {result["person"]}
+🌙 ~ منبع: {result["source"]}
+""")
+@bot.on_message_updates(filters.is_group(groups),filters.commands(["ayamedani","ایامیدانی","ایا می دانی","ایا میدانی"],''))
+async def send_fact2(update: Update):
+    if not update.object_guid in groups:
+        return None
+    async with AsyncClient() as client:
+        result = (await client.get(f"https://api.keybit.ir/ayamidanid")).json()
+        await update.reply("""
+📝| ایا میدانی؟
+
+** result['text'] **
+""")
+
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands(["time","زمان"],''))
 async def send_time(update: Update):
     if not update.object_guid in groups:
         return None
-    result = get("http://api.codebazan.ir/time-date/?json=fa").json()
+    async with AsyncClient() as client:
+        result = (await client.get("http://api.codebazan.ir/time-date/?json=fa")).json()
     if result["ok"]:
         result = result["result"]
-        await sleep(randint(1,3))
+        await sleep(utills.randint(1,3))
         await update.reply(f"""
 • ⏰ | زمان: {result["time"]}
 • 📆 |تاریخ: {result["date"]}
@@ -360,28 +354,37 @@ async def send_fact(update: Update):
     if not update.object_guid in groups:
         return None
     result = "📝| دانستنی \n"
-    result += get("http://api.codebazan.ir/danestani/").text
-    await sleep(randint(1,5))
+    async with AsyncClient() as client:
+        result += (await client.get("http://api.codebazan.ir/danestani/")).text
+    await sleep(utills.randint(1,5))
     await update.reply(result)
+@bot.on_message_updates(filters.is_group(groups),filters.commands(["الودگی","آلودگی"],''))
+async def send_aqms(update: Update):
+    if not update.object_guid in groups:
+        return None
+    city = update.text.split(" ")[1]
+    stations = []
+    for station in utills.aqms:
+        if city in station["StationName_Fa"]:
+            stations.append(station)
+    result = "☁️| الودگی هوا\n"
+    for station in stations:
+        result += f"""
+💨 • ** {station["StationName_Fa"]} **
+🌫️ • شاخص ** {station["AQI"]} AQI **
 
-#@bot.on_message_updates(filters.is_group(groups),filters.commands(["poem","غزل","شعر"],''))
-#async def send_poem(update: Update):
-#    if not update.object_guid in groups:
-#        return None
-#    result = get("https://api.codebazan.ir/ghazaliyathafez/?type=ghazal&num=2").json()
-#    if result["Ok"]:
-#        result = result["Result"][0]
-#        await sleep(randint(1,3))
-#        await update.reply(result["ghazal"])
-
+"""
+    await sleep(utills.randint(1,3))
+    await update.reply(result)
 @bot.on_message_updates(filters.is_group(groups),filters.commands("اوقات شرعی",''))
 async def send_timetable(update: Update):
     if not update.object_guid in groups:
         return None
     city = update.text.split(" ")
     if len(city)==3:
-        result = get("https://api.codebazan.ir/owghat/?city="+city[2]).json()["Result"][0]
-        await sleep(randint(1,3))
+        async with AsyncClient() as client:
+            result = (await client.get("https://api.codebazan.ir/owghat/?city="+city[2])).json()["Result"][0]
+        await sleep(utills.randint(1,3))
         await update.reply(f"""
     • 📅| اوقات شرعی 
 
@@ -396,16 +399,17 @@ async def send_timetable(update: Update):
     • 🌃| نیم شب: {result["nimeshab"]}
     """)
     elif len(city)==2:
-        await sleep(randint(1,3))
+        await sleep(utills.randint(1,3))
         await update.reply("""شهر مورد نظر وارد کنید
     اوقات شرعی [شهر مورد نظر]
 """)
+
 # Group Management Admin Methods
 @bot.on_message_updates(filters.is_group(groups),filters.commands("ban","/"))
 async def ban_user(update: Update):
     if not update.object_guid in groups:
         return None
-    if await update.is_admin(user_guid=update.author_guid):
+    if await is_admin(update.object_guid,update.author_guid):
         if hasattr(update,"reply_to_message_id"):
             guid=await update.get_reply_author()
             guid = guid["user"]["user_guid"]
@@ -415,7 +419,7 @@ async def ban_user(update: Update):
 async def unban_user(update: Update):
     if not update.object_guid in groups:
         return None
-    if await update.is_admin(user_guid=update.author_guid):
+    if await is_admin(update.object_guid,update.author_guid):
         if hasattr(update,"reply_to_message_id"):
             guid=await update.get_reply_author()
             guid = guid["user"]["user_guid"]
@@ -425,27 +429,27 @@ async def unban_user(update: Update):
 async def pin_user(update: Update):
     if not update.object_guid in groups:
         return None
-    if await update.is_admin(user_guid=update.author_guid):
+    if await is_admin(update.object_guid,update.author_guid):
         if hasattr(update,"reply_to_message_id"):
             await update.pin(message_id=update.reply_message_id)
-            await sleep(randint(1,3))
+            await sleep(utills.randint(1,3))
             await update.reply("با موفقیت پین/سنجاق شده")
  
 @bot.on_message_updates(filters.is_group(groups),filters.commands("unpin","/"))
 async def unpin_user(update: Update):
     if not update.object_guid in groups:
         return None
-    if await update.is_admin(user_guid=update.author_guid):
+    if await is_admin(update.object_guid,update.author_guid):
         if hasattr(update,"reply_to_message_id"):
             await update.unpin(message_id=update.reply_message_id)
-            await sleep(randint(1,3))
+            await sleep(utills.randint(1,3))
             await update.reply("با موفقیت لغو پین/سنجاق شده")
 
 @bot.on_message_updates(filters.is_group(groups),filters.commands("look","/"))
 async def look_anything(update: Update):
     if not update.object_guid in groups:
         return None
-    if not await update.is_admin(user_guid=update.author_guid):
+    if not await is_admin(update.object_guid,update.author_guid):
         return
     typeLook = update.text[6:]
     config = db.get_row_by_colum("guid",update.object_guid)
@@ -460,14 +464,14 @@ async def look_anything(update: Update):
 async def send_status(update: Update):
     if not update.object_guid in groups:
         return None
-    if not await update.is_admin(user_guid=update.author_guid):
+    if not await is_admin(update.object_guid,update.author_guid):
         return
     def booltoEmoji(t):
         if t:
             return "✅"
         return "❌"
     row = db.get_row_by_colum("guid",update.object_guid)
-    await sleep(randint(1,3))
+    await sleep(utills.randint(1,3))
     await update.reply(f"""وضعیت قفل ها:
 
 • قفل فوروارد: {booltoEmoji(row["look_forward"])}
@@ -481,80 +485,66 @@ async def send_status(update: Update):
 """)
 
 
-#@bot.on_message_updates(filters.is_group,filters.commands("voice","/"))
-#async def voice_settings(update: Update):
-#    if not update.object_guid in groups:
-#        return None
-#    groupInfo = await bot.get_group_info(update.object_guid)
-#    if hasattr(groupInfo["chat"],"group_voice_chat_id"):
-#        await bot.leave_group_voice_chat(update.object_guid,groupInfo["chat"]["group_voice_chat_id"])
-#    else:
-#        voice_chat_id = await bot.create_group_voice_chat(update.object_guid)
-#        print(voice_chat_id)
-#        voice_chat_id = voice_chat_id["group_voice_chat_update"]["voice_chat_id"]
-#        await bot.send_group_voice_chat_activity(update.object_guid,voice_chat_id)
-
-
 @bot.on_message_updates(filters.is_group,filters.commands("close","/"))
 async def close_group(update: Update):
     if not update.object_guid in groups:
         return None
-    if not await update.is_admin(user_guid=update.author_guid):
+    if not await is_admin(update.object_guid,update.author_guid):
         return
     await bot.set_group_default_access(update.object_guid,[])
-    await sleep(randint(1,3))
+    await sleep(utills.randint(1,3))
     await update.reply("گروه با موفقیت بسته شد")
 
 @bot.on_message_updates(filters.is_group,filters.commands("open","/"))
 async def open_group(update: Update):
     if not update.object_guid in groups:
         return None
-    if not await update.is_admin(user_guid=update.author_guid):
+    if not await is_admin(update.object_guid,update.author_guid):
         return
     await bot.set_group_default_access(update.object_guid,["SendMessages"])
-    await sleep(randint(1,3))
+    await sleep(utills.randint(1,3))
     await update.reply("گروه با موفقیت باز شد")
 
 @bot.on_message_updates(filters.is_group,filters.commands("help","/"))
 async def send_help(update: Update):
     if not update.object_guid in groups:
         return None
-    if not await update.is_admin(user_guid=update.author_guid):
+    if not await is_admin(update.object_guid,update.author_guid):
         return
-    await sleep(randint(1,3))
+    await sleep(utills.randint(1,3))
     await update.reply("""**راهنما ادمین ها:**
-/pin
+`/pin`
 • پین کردن پیام (حتما پیام مورد نظر ریپلای یا حالت پاسخ بزارید)
-/unpin
+`/unpin`
 • لغو پین یا سنجاق (حتما پیام مورد نظر ریپلای کنید)
-/ban 
+`/ban` 
 • بن کردن (حتما کاربر مورد نظر ریپلای کنید)
-/unban
+`/unban`
 • لغو بن ( حتما کاربر مورد نظر ریپلای کنید)
 
-/open
+`/open`
 • باز کردن گروه
-/close
+`/close`
 • بستن گروه
 
 **قفل ها:**
-/look link
+`/look link`
 • قفل کردن لینک ها
-/look forward
+`/look forward`
 • قفل کردن فوروارد
-/look insuit
+`/look insuit`
 • قفل کردن فحش ها
 
-/look image 
+`/look image`
 • قفل کردن عکس
-/look video
+`/look video`
 • قفل کردن ویدیوها
-/look gif
+`/look gif`
 • قفل کردن گیف ها
-/look voice
+`/look voice`
 • قفل کردن ویس ها
 
-/status
+`/status`
 • وضعیت قفل ها
 """)
 
@@ -563,13 +553,50 @@ async def send_help(update: Update):
 async def look_messages(update: Update):
     if not update.object_guid in groups:
         return None
-    if await update.is_admin(user_guid=update.author_guid):
+    if(update.is_event):
+        if(update["message"]["event_data"]["type"]=="LeaveGroup"):
+            await update.reply(utills.speak["leave"][utills.randint(0,len(utills.speak["leave"])-1)])
+        elif(update["message"]["event_data"]["type"]=="JoinedGroupByLink"):
+            await update.reply(utills.speak["join"][utills.randint(0,len(utills.speak["join"])-1)])
         return None
+    
+    # Speaker
+    if(update.is_text):
+        text = utills.speak["text"]
+        for key in list(text.keys()):
+            if "#" in key:
+                if key.replace("#","") == update.text:
+                    await sleep(utills.randint(0,5))
+                    await update.reply(text[key][utills.randint(0,len(text[key])-1)])
+                    break
+            elif key in update.text:
+                await sleep(utills.randint(0,5))
+                await update.reply(text[key][utills.randint(0,len(text[key])-1)])
+                break
+        if not update.reply_message_id==None:
+            text = utills.speak["reply"]
+            for key in list(text.keys()):
+                if "#" in key:
+                    if key.replace("#","") == update.text:
+                        if update.get_reply_author()==utills.speak["guid"]:
+                            await sleep(utills.randint(0,5))
+                            await update.reply(text[key][utills.randint(0,len(text[key])-1)])
+                            break
+                elif key in update.text:
+                    if (await update.get_reply_message())["author_object_guid"]==utills.speak["guid"]:
+                        await sleep(utills.randint(0,5))
+                        await update.reply(text[key][utills.randint(0,len(text[key])-1)])
+                        break
+    
+    # Looker
+    if await is_admin(update.object_guid,update.author_guid):
+        return None
+    
     config = db.get_row_by_colum("guid",update.object_guid)
     if update.is_text:
-        if config["look_link"] and has_link(update.text):
+        if config["look_link"] and await utills.has_link(update.text):
             await update.delete()
-        if config["look_insuit"] and has_insuit(update.text):
+        if config["look_insuit"] and await utills.has_insuit(update.text):
             await update.delete()
     elif config["look_forward"] and update.is_forward:
         await update.delete()
@@ -642,13 +669,27 @@ async def get_guid_by_link(update: Update):
     await update.seen()
     await update.reply(guid["group"]["group_guid"])
 
-@bot.on_message_updates(filters.object_guids(admins),filters.commands("sendall","/"))
-async def send_all(update: Update):
+@bot.on_message_updates(filters.object_guids(admins),filters.commands("textall","/"))
+async def send_text_all(update: Update):
     text = await update.get_reply_message()
-    text = text["message"]["text"]
+    text = text["text"]
     for guid in groups:
-        await bot.send_message(guid,text)
-        
+        try:
+            await bot.send_message(guid,text)
+        except:
+            print(guid)
+            print("ERROR: Above")
+
+@bot.on_message_updates(filters.object_guids(admins),filters.commands("forwardall","/"))
+async def forward_all(update: Update):
+    text = await update.get_reply_message()
+    for guid in groups:
+        try:
+            await bot.forward_messages(text["author_object_guid"],guid,[text["message_id"]])
+        except:
+            print(guid)
+            print("ERROR: Above")
+
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("autoupdate","/"),filters.is_private,filters.is_text)
 async def update_usd_price(update: Update):
     is_autoupdate=True
@@ -660,9 +701,9 @@ async def update_usd_price(update: Update):
 
         result = []
         # Get Prices 
-        async with aiohttp.ClientSession() as session:
-            async with session.get("http://api.codebazan.ir/arz/?type=arz") as res:
-                result = await res.json()
+        async with AsyncClient() as client:
+            result = (await client.get("http://api.codebazan.ir/arz/?type=arz")).json()
+            utills.aqms = (await client.get("https://aqms.doe.ir/Home/LoadAQIMap?id=2")).json()
         
         # Check Prices And Go
         if(not result["Ok"]):
@@ -675,17 +716,12 @@ async def update_usd_price(update: Update):
             text+="💵| "+ money["name"]+": "+str(money["price"])+"R\n"
         text+="\n**•**"
         await bot.edit_message(config["channel"],config["usdid"],text)
-        await asyncio.sleep(5)
+        await sleep(3600)
 
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("disautoupdate","/"),filters.is_text,filters.is_private)
 async def disable_usd_update(update: Update):
     is_autoupdate = False
     await update.seen()
-
-@bot.on_message_updates(filters.object_guids(admins),filters.commands("msgid","/"),filters.is_text,filters.is_private)
-async def get_message_id(update: Update):
-    #NEED
-    print(await bot.get_messages_by_id(config["channel"],config["usdid"]))
 
 @bot.on_message_updates(filters.is_private,filters.object_guids(admins),filters.commands("getincome","/"),filters.is_text,filters.is_private)
 async def send_income_status(update: Update):
@@ -696,13 +732,13 @@ async def send_income_status(update: Update):
 • 📊**| امار فروشگاه فرعون شاپ
 **
                        
-• 🚀 | کل سفارش : {stm(statusIncome["sizeorder"])}
-• ✅ | موفق :     {stm(statusIncome["corder"])}
-• ❌ | ناموفق :   {stm(statusIncome["norder"])}
+• 🚀 | کل سفارش : {await utills.stm(statusIncome["sizeorder"])}
+• ✅ | موفق :     {await utills.stm(statusIncome["corder"])}
+• ❌ | ناموفق :   {await utills.stm(statusIncome["norder"])}
 
-• 🏦 | موجودی :   {stm(statusIncome["money"])}
-• 💰 | سود :      {stm(statusIncome["income"])}
-• 🧾 | هزینه :    {stm(statusIncome["cost"])}
+• 🏦 | موجودی :   {await utills.stm(statusIncome["money"])}
+• 💰 | سود :      {await utills.stm(statusIncome["income"])}
+• 🧾 | هزینه :    {await utills.stm(statusIncome["cost"])}
 """)
 
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("cleanincome","/"),filters.is_text,filters.is_private)
@@ -721,67 +757,31 @@ async def clean_status(update: Update):
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("setcost","/"),filters.is_text,filters.is_private)
 async def setcost(update: Update):
     statusIncome["cost"] = int(update.text.split(" ")[1])
-    print(update.text.split(" ")[1])
-    print(int(update.text.split(" ")[1]))
     await update.seen()
 
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("getconfig","/"),filters.is_text,filters.is_private)
 async def send_config(update: Update):
-    await update.reply(dumps(config))
+    await update.reply(utills.dumps(config))
 
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("setconfig","/"),filters.is_text,filters.is_private)
-async def send_config(update: Update):
+async def set_config(update: Update):
     if hasattr(update,"reply_to_message_id"):
         msgText = (await bot.get_messages_by_id(update.object_guid,[update.reply_message_id]))["messages"][0]["text"]
-        config = loads(msgText)
+        config = utills.loads(msgText)
         await update.seen()
 
 @bot.on_message_updates(filters.object_guids(admins),filters.commands("setallorder","/"),filters.is_text,filters.is_private)
-async def send_config(update: Update):
+async def set_all_order(update: Update):
     config["allorder"] = int(update.text.split(" ")[1])
     await update.seen()
-
-@bot.on_message_updates(filters.object_guids(admins),filters.commands("uploadvideo","/"),filters.is_text,filters.is_private)
-async def upload_video_channel(update: Update):
-    params = update.text.split("\n")
-    url = params[1]
-    hashtag = params[2]
-    caption = params[3]
-
-    # First Download File
-    await update.reply("فایل شما درحال دانلود شدن است")
-    await download_file(url,"file.mp4")
-    
-    # Upload
-    await update.reply("فایل شما در حال اپلود است")
-    await bot.send_video(config["upload"],"file.mp4",f"""•
-  🎬| #ویدیو {hashtag}
-  🧾| توضیحات:  {caption}
-  
-💎| • تماشا با کیفیت بالا •
-
-    بکوب روی جوین یا پیوستن
-  **•√Pharaoh√Shop• فرعون شاپ**
-  @pharaohshop
-°
-""")
-    await update.reply("فایل شما اپلود شد.")
-    remove("file.mp4")
         
 # Test Robot Function
 @bot.on_message_updates(filters.object_guids(admins),filters.text,filters.is_private,filters.commands("test","/"))
 async def send_test_message(update: Update):
     await update.reply(f"""
     **ربات انلاین است**
-    ساعت: | {strftime("%H:%M:%S")}
+    ساعت: | {utills.gettime("%H:%M:%S")}
 """)
-@bot.on_message_updates(filters.object_guids(admins),filters.text,filters.is_private,filters.commands("channel","/"))
-async def get_channel_info(update: Update):
-    members = []
-    mem = (await bot.get_channel_all_members(config["channel"]))["in_chat_members"]
-    for member in mem:
-        members.append(member["member_guid"])
-    await update.reply(str(members))
 
 #  Help Command To Control Bot
 @bot.on_message_updates(filters.object_guids(admins),filters.text,filters.is_private,filters.commands("help","/"))
@@ -805,8 +805,22 @@ async def send_help_message(update: Update):
     تعیین تنظیمات ربات
 /setallorder [عدد موردنظر]
     تعیین تمام سفارش ها
-/uploadvideo [:url] [:hashtag] [:caption]
-    اپلود کردن ویدیو
+Group Management:
+/gettable
+گرفتن جدول
+/settable [REPLY]
+تعیین جدول
+/joingroup link
+افزودن گروه
+/addbyguid
+افزودن گروه با گوید
+/getguidbylink
+گرفتن گوید با لینک
+/textall [REPLY]
+فرستاند پیام به گروه ها
+/forwardall [REPLY]
+فوروارد به همیه گروه ها
 """)
 
+print("Bot is Running...")
 bot.run()
